@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TCP/IP Data Transmission Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F3F5F7; --panel:#FFFFFF; --ink:#17212B; --sub:#465563; --line:#CBD3DA;
+    --app:#3E6C8E; --trans:#4B8967; --net:#C97B3B; --link:#7C5A96;
+    --accent:#E0A438; --good:#3E8F6B;
+    padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+    box-sizing:border-box;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){ --bg:#131922; --panel:#1B2530; --ink:#F1F5F8; --sub:#B7C2CC; --line:#3A4753; }
+  }
+  :root[data-theme="dark"]{ --bg:#131922; --panel:#1B2530; --ink:#F1F5F8; --sub:#B7C2CC; --line:#3A4753; }
+  *{box-sizing:inherit;}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;}
+  body{padding:16px 20px 20px;line-height:1.4;min-height:100vh;}
+  .wrap{max-width:1080px;margin:0 auto;}
+  h1{font-family:'Space Grotesk',system-ui,sans-serif;font-size:27px;line-height:1.15;margin:0 0 4px;letter-spacing:-0.01em;}
+  .tag{color:var(--sub);font-size:15px;line-height:1.4;margin:0 0 14px;max-width:78ch;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:12px;}
+  .sim-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start;}
+  .sim-column{min-width:0;}
+  .column-title{font-family:'Inter',sans-serif;font-size:16px;font-weight:700;color:var(--ink);margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line);}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .controls input{flex:1;min-width:170px;padding:9px 12px;border-radius:7px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:16px;font-family:'Inter',sans-serif;}
+  .controls input:focus{outline:2px solid var(--accent);outline-offset:1px;}
+  button{font-family:'Inter',sans-serif;font-weight:600;font-size:14px;border-radius:7px;padding:9px 14px;border:none;cursor:pointer;transition:background .12s ease, opacity .12s ease;}
+  button:active{transform:scale(.97);}
+  button:disabled{opacity:.4;cursor:not-allowed;}
+  button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  .btn-primary{background:var(--ink);color:var(--bg);}
+  .btn-ghost{background:transparent;color:var(--ink);border:1px solid var(--line);}
+
+  .stage{display:flex;justify-content:space-between;gap:8px;flex-wrap:nowrap;align-items:stretch;}
+  .stack{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;}
+  .stack-title{font-family:'Inter',sans-serif;font-size:16px;font-weight:700;color:var(--ink);text-align:center;margin-bottom:2px;}
+  .layer{border:1px solid var(--line);border-radius:7px;padding:8px 11px;font-size:15px;font-weight:500;display:flex;align-items:center;gap:9px;min-height:52px;transition:box-shadow .2s ease, border-color .2s ease, background .2s ease;background:var(--bg);}
+  .layer-copy{display:flex;flex-direction:column;gap:1px;}
+  .layer-name{font-weight:650;line-height:1.25;}
+  .layer-example{font-size:12px;line-height:1.2;color:var(--sub);font-family:'IBM Plex Mono',monospace;}
+  .layer .dot{width:10px;height:10px;border-radius:50%;background:var(--line);flex-shrink:0;transition:background .2s ease;}
+  .layer.active{border-color:var(--l-color);background:color-mix(in srgb,var(--l-color) 8%,var(--panel));box-shadow:inset 4px 0 var(--l-color);}
+  .layer.active .dot{background:var(--l-color);}
+  .layer.done{opacity:.78;}
+  .layer[data-l="application"]{--l-color:var(--app);}
+  .layer[data-l="transport"]{--l-color:var(--trans);}
+  .layer[data-l="network"]{--l-color:var(--net);}
+  .layer[data-l="datalink"]{--l-color:var(--link);}
+  .layer[data-l="physical"]{--l-color:var(--accent);}
+
+  .wire{flex:0 0 56px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:56px;}
+  .wire-track{width:100%;height:3px;background:repeating-linear-gradient(90deg,var(--line) 0 6px, transparent 6px 11px);position:relative;}
+  .wire-dot{position:absolute;top:50%;left:0;width:12px;height:12px;border-radius:50%;background:var(--accent);transform:translate(-50%,-50%);opacity:0;box-shadow:0 0 0 5px color-mix(in srgb, var(--accent) 22%, transparent);}
+  .wire-dot.moving{opacity:1;transition:left 1.3s cubic-bezier(.5,0,.3,1);}
+  .wire-label{font-size:13px;line-height:1.35;font-weight:700;color:var(--ink);margin-top:10px;text-align:center;}
+  .wire-label span{font-size:12px;line-height:1.3;font-weight:400;color:var(--sub);}
+
+  .packet-panel{margin-top:0;}
+  .packet-hdr{font-family:'Inter',sans-serif;font-size:16px;font-weight:700;color:var(--ink);margin-bottom:8px;}
+  .phase{display:flex;align-items:center;gap:9px;margin:0 0 8px;padding:8px 11px;border:1px solid var(--line);border-radius:7px;background:color-mix(in srgb,var(--accent) 10%,var(--panel));font-size:14px;font-weight:600;color:var(--ink);}
+  .phase-mark{width:11px;height:11px;border-radius:50%;background:var(--accent);flex:none;}
+  .packet-key{font-size:13px;line-height:1.35;color:var(--sub);text-align:center;margin-top:6px;}
+  .packet-key b{color:var(--ink);}
+  .packet-shell{display:flex;align-items:center;justify-content:center;min-height:96px;max-width:100%;overflow-x:auto;overflow-y:hidden;padding:15px 8px 5px;}
+  .nest{display:flex;align-items:center;justify-content:center;flex:0 0 auto;border-radius:9px;padding:21px 13px 10px;border:2px solid var(--nc,var(--line));transition:all .3s ease;position:relative;min-height:50px;}
+  .nest .chip{position:absolute;top:-11px;left:10px;max-width:calc(100% - 20px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:var(--panel);padding:0 6px;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--nc,var(--sub));}
+  .msg-core{font-family:'IBM Plex Mono',monospace;font-size:17px;background:var(--bg);border-radius:6px;padding:10px 15px;color:var(--ink);white-space:nowrap;}
+
+  .caption{font-size:15px;line-height:1.4;color:var(--ink);min-height:22px;text-align:center;padding:4px 8px;}
+  .steps-dots{display:flex;justify-content:center;gap:7px;margin-top:10px;}
+  .steps-dots span{width:7px;height:7px;border-radius:50%;background:var(--line);}
+  .steps-dots span.on{background:var(--accent);}
+
+  .final{display:none;text-align:center;padding:14px;border:1.5px dashed var(--good);border-radius:9px;margin-top:10px;}
+  .final.show{display:block;}
+  .final .label{font-size:15px;color:var(--good);font-family:'Inter',sans-serif;font-weight:700;margin-bottom:8px;}
+  .final .msg{font-family:'IBM Plex Mono',monospace;font-size:22px;}
+
+  @media (max-width:640px){
+    body{padding:12px 10px 16px;}
+    h1{font-size:24px;}
+    .tag{font-size:14px;margin-bottom:10px;}
+    .panel{padding:12px;margin-bottom:10px;}
+    .sim-layout{grid-template-columns:minmax(0,1fr);gap:14px;}
+    .controls{gap:7px;}
+    .controls input{min-width:100%;}
+    .stage{flex-direction:row;gap:5px;}
+    .stack{min-width:0;width:100%;gap:4px;}
+    .stack-title{font-size:13px;}
+    .layer{min-height:40px;padding:5px 6px;gap:6px;font-size:13px;}
+    .layer .dot{width:7px;height:7px;}
+    .layer-example{font-size:9px;}
+    .layer-copy{min-width:0;}
+    .wire{flex-direction:column;min-height:0;flex:0 0 20px;min-width:20px;width:20px;}
+    .wire-track{height:3px;width:100%;background:repeating-linear-gradient(90deg,var(--line) 0 6px, transparent 6px 11px);}
+    .wire-dot{top:50%;left:0;transform:translate(-50%,-50%);}
+    .wire-dot.moving{transition:left 1.3s cubic-bezier(.5,0,.3,1);}
+    .wire-label{display:none;}
+    .packet-shell{min-height:72px;padding:13px 3px 3px;}
+    .nest{padding:18px 8px 8px;}
+    .nest .chip{font-size:10px;left:7px;max-width:calc(100% - 14px);}
+    .msg-core{font-size:14px;padding:8px 10px;}
+    .caption{font-size:14px;}
+  }
+  @media (max-height:760px) and (min-width:641px){
+    body{padding-top:10px;padding-bottom:10px;}
+    .tag{margin-bottom:8px;}
+    .panel{padding:12px;margin-bottom:8px;}
+    .layer{min-height:46px;padding:6px 10px;}
+    .stack{gap:4px;}
+    .packet-shell{min-height:76px;padding-top:12px;}
+    .caption{font-size:14px;min-height:18px;}
+    .steps-dots{margin-top:6px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>TCP/IP Data Transmission Simulator</h1>
+  <p class="tag">Watch a message get wrapped in headers as it moves down the sender's stack, cross the network, then get unwrapped as it climbs the receiver's stack.</p>
+
+  <div class="panel controls">
+    <input id="msgInput" type="text" maxlength="40" value="Hello, network!" placeholder="Type a message to send…">
+    <button class="btn-primary" id="startBtn">Start transmission</button>
+    <button class="btn-ghost" id="prevBtn" disabled>Previous</button>
+    <button class="btn-ghost" id="nextBtn" disabled>Next</button>
+    <button class="btn-ghost" id="resetBtn">Reset</button>
+  </div>
+
+  <div class="panel sim-layout">
+    <section class="sim-column process-column">
+      <h2 class="column-title">Transmission path</h2>
+      <div class="stage">
+      <div class="stack" id="senderStack">
+        <div class="stack-title">Sender</div>
+        <div class="layer" data-l="application"><span class="dot"></span><span class="layer-copy"><span class="layer-name">Application</span><span class="layer-example">HTTP · message</span></span></div>
+        <div class="layer" data-l="transport"><span class="dot"></span><span class="layer-copy"><span class="layer-name">Transport</span><span class="layer-example">TCP · ports</span></span></div>
+        <div class="layer" data-l="network"><span class="dot"></span><span class="layer-copy"><span class="layer-name">Network</span><span class="layer-example">IP · addresses</span></span></div>
+        <div class="layer" data-l="datalink"><span class="dot"></span><span class="layer-copy"><span class="layer-name">Data Link</span><span class="layer-example">Ethernet · MAC</span></span></div>
+        <div class="layer" data-l="physical"><span class="dot"></span><span class="layer-copy"><span class="layer-name">Physical</span><span class="layer-example">Bits · signals</span></span></div>
+      </div>
+      <div class="wire">
+        <div class="wire-track"><div class="wire-dot" id="wireDot"></div></div>
+        <div class="wire-label">NETWORK<br><span>bits travel between devices</span></div>
+      </div>
+      <div class="stack" id="receiverStack">
+        <div class="stack-title">Receiver</div>
+        <div class="layer" data-l="physical"><span class="dot"></span><span class="layer-copy"><span class="layer-name">Physical</span><span class="layer-example">Bits · signals</span></span></div>
+        <div class="layer" data-l="datalink"><span class="dot"></span><span class="layer-copy"><span class="layer-name">Data Link</span><span class="layer-example">Ethernet · MAC</span></span></div>
+        <div class="layer" data-l="network"><span class="dot"></span><span class="layer-copy"><span class="layer-name">Network</span><span class="layer-example">IP · addresses</span></span></div>
+        <div class="layer" data-l="transport"><span class="dot"></span><span class="layer-copy"><span class="layer-name">Transport</span><span class="layer-example">TCP · ports</span></span></div>
+        <div class="layer" data-l="application"><span class="dot"></span><span class="layer-copy"><span class="layer-name">Application</span><span class="layer-example">HTTP · message</span></span></div>
+      </div>
+      </div>
+    </section>
+
+    <section class="sim-column output-column">
+      <h2 class="column-title">Packet output &amp; details</h2>
+      <div class="packet-panel">
+      <div class="packet-hdr">Packet structure at this step</div>
+      <div class="phase" id="phase"><span class="phase-mark"></span><span>Start a transmission to follow the message.</span></div>
+      <div class="packet-shell" id="packetShell"></div>
+      <div class="packet-key"><b>Inside</b> = original message&nbsp; · &nbsp;<b>each outline</b> = header added by a layer</div>
+      </div>
+
+      <p class="caption" id="caption">Enter a message and press "Start transmission" to begin.</p>
+      <div class="steps-dots" id="dots"></div>
+      <div class="final" id="finalBox">
+        <div class="label">DELIVERED TO APPLICATION LAYER</div>
+        <div class="msg" id="finalMsg"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const senderLayers = $('#senderStack').querySelectorAll('.layer');
+const receiverLayers = $('#receiverStack').querySelectorAll('.layer');
+const packetShell = $('#packetShell');
+const caption = $('#caption');
+const wireDot = $('#wireDot');
+const dotsEl = $('#dots');
+const finalBox = $('#finalBox');
+const finalMsg = $('#finalMsg');
+const startBtn = $('#startBtn');
+const prevBtn = $('#prevBtn');
+const nextBtn = $('#nextBtn');
+const resetBtn = $('#resetBtn');
+const msgInput = $('#msgInput');
+
+let steps = [];
+let stepIndex = -1;
+
+function clearActive(){
+  senderLayers.forEach(l=>l.classList.remove('active','done'));
+  receiverLayers.forEach(l=>l.classList.remove('active','done'));
+}
+
+function buildSteps(msg){
+  return [
+    { side:'sender', layer:'application', mode:['msg'], caption:`Application layer hands your message to the stack as raw data.` },
+    { side:'sender', layer:'transport', mode:['msg','tcp'], caption:`Transport layer wraps it in a TCP header — source port 49213, destination port 80.` },
+    { side:'sender', layer:'network', mode:['msg','tcp','ip'], caption:`Network layer adds an IP header — 192.168.1.10 → 93.184.216.34.` },
+    { side:'sender', layer:'datalink', mode:['msg','tcp','ip','frame'], caption:`Data Link layer adds a frame header/trailer with MAC addresses and a checksum.` },
+    { side:'sender', layer:'physical', mode:['msg','tcp','ip','frame'], caption:`Physical layer transmits the framed packet across the medium.` },
+    { side:'travel', mode:['msg','tcp','ip','frame'], caption:`The framed packet travels across the physical network to the receiver.` },
+    { side:'receiver', layer:'physical', mode:['msg','tcp','ip'], caption:`Receiver's Physical layer detects the signal and passes it upward.` },
+    { side:'receiver', layer:'datalink', mode:['msg','tcp','ip'], caption:`Data Link layer checks the frame, strips it, and passes the IP packet up.` },
+    { side:'receiver', layer:'network', mode:['msg','tcp'], caption:`Network layer reads the IP header, strips it, and passes the TCP segment up.` },
+    { side:'receiver', layer:'transport', mode:['msg'], caption:`Transport layer verifies the TCP header, strips it, and hands raw data up.` },
+    { side:'receiver', layer:'application', mode:['final'], caption:`Application layer reassembles the original message.` },
+  ];
+}
+
+const headerInfo = {
+  tcp:{ color:'var(--trans)', chip:'TCP · :49213→:80' },
+  ip:{ color:'var(--net)', chip:'IP · 192.168.1.10→93.184.216.34' },
+  frame:{ color:'var(--link)', chip:'FRAME · AA:BB:..→FF:EE:..' },
+};
+
+function renderPacket(mode, msg){
+  let html = `<div class="msg-core">${escapeHtml(msg)}</div>`;
+  ['tcp','ip','frame'].forEach(k=>{
+    if(mode.includes(k)){
+      const info = headerInfo[k];
+      html = `<div class="nest" style="--nc:${info.color}"><span class="chip">${info.chip}</span>${html}</div>`;
+    }
+  });
+  packetShell.innerHTML = html;
+}
+
+function escapeHtml(s){ return s.replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function renderDots(total, current){
+  dotsEl.innerHTML = '';
+  for(let i=0;i<total;i++){
+    const d = document.createElement('span');
+    if(i<=current) d.classList.add('on');
+    dotsEl.appendChild(d);
+  }
+}
+
+function animateWire(direction){
+  const vertical = false;
+  const from = direction > 0 ? '0%' : '100%';
+  const to = direction > 0 ? '100%' : '0%';
+
+  wireDot.style.opacity = '1';
+  wireDot.classList.remove('moving');
+  wireDot.style[vertical ? 'top' : 'left'] = from;
+  void wireDot.offsetWidth;
+
+  requestAnimationFrame(()=>{
+    wireDot.classList.add('moving');
+    wireDot.style[vertical ? 'top' : 'left'] = to;
+  });
+}
+
+function runStep(i, msg, direction = 1){
+  const s = steps[i];
+  clearActive();
+  caption.textContent = s.caption;
+  renderDots(steps.length, i);
+  const phaseText = s.side === 'sender'
+    ? 'ENCAPSULATION · each lower layer adds its header'
+    : s.side === 'travel'
+      ? 'TRANSMISSION · the complete frame crosses the network'
+      : s.mode.includes('final')
+        ? 'DELIVERED · the original message reaches the application'
+        : 'DECAPSULATION · each layer reads and removes its header';
+  $('#phase').lastElementChild.textContent = phaseText;
+
+  if(s.side === 'sender'){
+    senderLayers.forEach(l=>{
+      if(l.dataset.l === s.layer) l.classList.add('active');
+      else if(orderIndex(l.dataset.l) < orderIndex(s.layer)) l.classList.add('done');
+    });
+    renderPacket(s.mode, msg);
+    if(direction < 0 && i === 4) animateWire(-1);
+  } else if(s.side === 'travel'){
+    senderLayers.forEach(l=>{ if(l.dataset.l==='physical') l.classList.add('active'); else l.classList.add('done'); });
+    receiverLayers.forEach(l=>{ if(l.dataset.l==='physical') l.classList.add('active'); });
+    renderPacket(s.mode, msg);
+    animateWire(direction);
+  } else if(s.side === 'receiver'){
+    receiverLayers.forEach(l=>{
+      const recvOrder = ['physical','datalink','network','transport','application'];
+      if(l.dataset.l === s.layer) l.classList.add('active');
+      else if(recvOrder.indexOf(l.dataset.l) < recvOrder.indexOf(s.layer)) l.classList.add('done');
+    });
+    senderLayers.forEach(l=>l.classList.add('done'));
+    if(s.mode.includes('final')){
+      renderPacket([], msg);
+      finalMsg.textContent = msg;
+      finalBox.classList.add('show');
+    } else {
+      renderPacket(s.mode, msg);
+    }
+  }
+}
+
+function orderIndex(l){ return ['application','transport','network','datalink','physical'].indexOf(l); }
+
+function updateNavState(){
+  prevBtn.disabled = !steps.length || stepIndex <= 0;
+  nextBtn.disabled = !steps.length || stepIndex >= steps.length - 1;
+}
+
+function start(){
+  const msg = msgInput.value.trim() || 'Hello, network!';
+  reset(false);
+  steps = buildSteps(msg);
+  stepIndex = 0;
+  startBtn.disabled = true;
+  msgInput.disabled = true;
+  prevBtn.disabled = true;
+  nextBtn.disabled = false;
+  runStep(stepIndex, msg, 1);
+  updateNavState();
+}
+
+function showNextStep(){
+  if(!steps.length || stepIndex >= steps.length - 1){
+    return;
+  }
+
+  const msg = msgInput.value.trim() || 'Hello, network!';
+  stepIndex += 1;
+  runStep(stepIndex, msg, 1);
+  updateNavState();
+
+  if(stepIndex >= steps.length - 1){
+    nextBtn.disabled = true;
+    startBtn.disabled = false;
+    msgInput.disabled = false;
+  }
+}
+
+function showPreviousStep(){
+  if(!steps.length || stepIndex <= 0){
+    return;
+  }
+
+  const msg = msgInput.value.trim() || 'Hello, network!';
+  stepIndex -= 1;
+  runStep(stepIndex, msg, -1);
+  updateNavState();
+}
+
+function reset(clearMsg){
+  stepIndex = -1;
+  clearActive();
+  caption.textContent = 'Enter a message and press "Start transmission" to begin.';
+  renderDots(9, -1);
+  wireDot.style.opacity = '0';
+  wireDot.classList.remove('moving');
+  finalBox.classList.remove('show');
+  packetShell.innerHTML = '';
+  startBtn.disabled = false;
+  prevBtn.disabled = true;
+  nextBtn.disabled = true;
+  msgInput.disabled = false;
+}
+
+startBtn.addEventListener('click', start);
+prevBtn.addEventListener('click', showPreviousStep);
+nextBtn.addEventListener('click', showNextStep);
+resetBtn.addEventListener('click', ()=>reset(true));
+document.addEventListener('keydown', event=>{
+  if(event.altKey || event.ctrlKey || event.metaKey) return;
+  const target = event.target;
+  if(target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+  if(event.key === '>'){
+    event.preventDefault();
+    showNextStep();
+  } else if(event.key === '<'){
+    event.preventDefault();
+    showPreviousStep();
+  }
+});
+renderDots(9, -1);
+</script>
+</body>
+</html>
